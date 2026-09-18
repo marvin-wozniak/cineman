@@ -85,7 +85,7 @@ class DatabaseManager:
     def add_screening(self, screening: Screening) -> Screening:
         """Insère une séance en base de données."""
         if screening.movie.id is None:
-            raise ValueError("Le film associé doit posséder unID avant d'ajouter une séance.")
+            raise ValueError("Le film associé doit posséder un ID avant d'ajouter une séance.")
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
