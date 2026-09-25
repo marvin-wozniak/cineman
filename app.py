@@ -7,9 +7,14 @@ from src.models import Cinema, Movie, Screening
 from src.notifier import notify_screening_created
 
 # Configuration de la page Streamlit
-st.set_page_config(page_title="Cineman", page_icon="🎬", layout="wide")
+st.set_page_config(
+    page_title="Cineman",
+    page_icon="🎬",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-# Initialisation du gestionnaire BDD
+# Initialisation du gestionnaire BDD (déclenche aussi le nettoyage auto -8j)
 db = DatabaseManager("cineman.db")
 
 st.title("🎬 Cineman — Programmation Répertoire")
@@ -23,7 +28,7 @@ tab_planning, tab_add_screening, tab_add_movie, tab_add_cinema = st.tabs([
 ])
 
 # -------------------------------------------------------------------
-# ONGLET 1 : Planning des séances
+# ONGLET 1 : Planning des séances (Layout Optimisé Mobile)
 # -------------------------------------------------------------------
 with tab_planning:
     st.header("Planning des séances")
@@ -34,8 +39,8 @@ with tab_planning:
     if not screenings:
         st.info("Aucune séance programmée pour le moment.")
     else:
-        # --- Barre de filtres ---
-        col_f1, col_f2 = st.columns(2)
+        # --- Barre de filtres (adaptée mobile) ---
+        col_f1, col_f2 = st.columns([1, 1])
         with col_f1:
             cinema_filter = st.selectbox(
                 "Filtrer par cinéma",
@@ -66,20 +71,18 @@ with tab_planning:
 
         st.divider()
 
-        # Affichage de la liste
+        # Affichage réactif des séances sous forme de cartes d'information
         for s in filtered_screenings:
             with st.container():
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                # On utilise un découpage 2 colonnes adaptatif (Titre/Lieu à gauche, Statut/Actions à droite)
+                col_left, col_right = st.columns([3, 2])
 
-                # Infos Film
-                with col1:
-                    st.subheader(s.movie.title)
+                with col_left:
+                    st.subheader(f"{s.movie.title}")
                     st.caption(
-                        f"De **{s.movie.director}** ({s.movie.year}) — {s.movie.runtime} min"
+                        f"De **{s.movie.director}** ({s.movie.year}) — ⏱️ {s.movie.runtime} min"
                     )
 
-                # Infos Lieu & Horaire
-                with col2:
                     start_str = s.date_time.strftime("%d/%m/%Y à %Hh%M")
                     end_str = (
                         s.end_time.strftime("%Hh%M") if s.end_time else "N/A"
@@ -88,13 +91,12 @@ with tab_planning:
                     st.write(f"📍 **{s.cinema.name}**")
                     st.write(f"🕒 **{start_str}** *(Fin ~ {end_str})*")
 
-                    # Lien Google Maps
+                    # Lien Google Maps sécurisé
                     if s.cinema.google_maps_url:
                         url = s.cinema.google_maps_url.strip()
-                        if not url.startswith(("http://","https://")):
+                        if not url.startswith(("http://", "https://")):
                             url = f"https://{url}"
-
-                            st.markdown(
+                        st.markdown(
                             f"[🗺️ Voir sur Google Maps]({url})",
                             unsafe_allow_html=True,
                         )
@@ -107,22 +109,32 @@ with tab_planning:
                             unsafe_allow_html=True,
                         )
 
-                # Statut & Action Vu
-                with col3:
+                with col_right:
+                    # Boutons pleine largeur pour faciliter le clic au pouce sur smartphone
                     if s.is_projected:
                         st.success("Vu ✅")
-                        if st.button("Marquer comme à voir", key=f"unsee_{s.id}"):
+                        if st.button(
+                            "Remettre à voir 🍿",
+                            key=f"unsee_{s.id}",
+                            use_container_width=True,
+                        ):
                             db.mark_screening_as_projected(s.id, False)
                             st.rerun()
                     else:
                         st.warning("À voir 🍿")
-                        if st.button("Marquer comme vu ✅", key=f"see_{s.id}"):
+                        if st.button(
+                            "Marquer comme vu ✅",
+                            key=f"see_{s.id}",
+                            use_container_width=True,
+                        ):
                             db.mark_screening_as_projected(s.id, True)
                             st.rerun()
 
-                # Action Supprimer
-                with col4:
-                    if st.button("🗑️", key=f"del_scr_{s.id}", help="Supprimer la séance"):
+                    if st.button(
+                        "🗑️ Supprimer",
+                        key=f"del_scr_{s.id}",
+                        use_container_width=True,
+                    ):
                         db.delete_screening(s.id)
                         st.success("Séance supprimée.")
                         st.rerun()
@@ -130,7 +142,7 @@ with tab_planning:
                 st.divider()
 
 # -------------------------------------------------------------------
-# ONGLET 2 : Programmer une séance
+# ONGLET 2 : Programmer une séance (avec détection de conflits)
 # -------------------------------------------------------------------
 with tab_add_screening:
     st.header("Programmer une nouvelle séance")
@@ -160,7 +172,9 @@ with tab_add_screening:
             with col_time:
                 screening_time = st.time_input("Heure de début", value=time(20, 0))
 
-            submit_screening = st.form_submit_button("Enregistrer la séance")
+            submit_screening = st.form_submit_button(
+                "Enregistrer la séance", use_container_width=True
+            )
 
             if submit_screening:
                 selected_movie = movie_options[selected_movie_label]
@@ -174,16 +188,20 @@ with tab_add_screening:
                     date_time=full_datetime,
                 )
 
-                # Sauvegarde en base de données
-                saved_screening = db.add_screening(new_screening)
+                try:
+                    # Tentative d'ajout en BDD (vérifie les conflits d'horaires)
+                    saved_screening = db.add_screening(new_screening)
 
-                # Envoi immédiat de la notification (et planification du rappel)
-                notify_screening_created(saved_screening)
+                    # Notification par e-mail
+                    notify_screening_created(saved_screening)
 
-                st.success(
-                    f"Séance pour '{selected_movie.title}' au {selected_cinema.name} programmée avec succès !"
-                )
-                st.rerun()
+                    st.success(
+                        f"Séance pour '{selected_movie.title}' au {selected_cinema.name} programmée avec succès !"
+                    )
+                    st.rerun()
+                except ValueError as err:
+                    # Affichage clair de l'erreur de conflit d'agenda
+                    st.error(f"⚠️ {err}")
 
 # -------------------------------------------------------------------
 # ONGLET 3 : Gestion des films
@@ -209,7 +227,9 @@ with tab_add_movie:
                     "Durée (minutes)", min_value=1, max_value=600, value=100
                 )
 
-            submit_movie = st.form_submit_button("Enregistrer le film")
+            submit_movie = st.form_submit_button(
+                "Enregistrer le film", use_container_width=True
+            )
 
             if submit_movie:
                 if not title.strip() or not director.strip():
@@ -234,9 +254,13 @@ with tab_add_movie:
             for m in movies_list:
                 c1, c2 = st.columns([4, 1])
                 with c1:
-                    st.write(f"🎬 **{m.title}** — {m.director} ({m.year}) [{m.runtime} min]")
+                    st.write(
+                        f"🎬 **{m.title}** — {m.director} ({m.year}) [{m.runtime} min]"
+                    )
                 with c2:
-                    if st.button("🗑️", key=f"del_mov_{m.id}", help="Supprimer ce film"):
+                    if st.button(
+                        "🗑️", key=f"del_mov_{m.id}", help="Supprimer ce film"
+                    ):
                         db.delete_movie(m.id)
                         st.rerun()
 
@@ -252,13 +276,17 @@ with tab_add_cinema:
         st.subheader("Ajouter un cinéma")
         with st.form("add_cinema_form"):
             name = st.text_input("Nom du cinéma", placeholder="ex: Reflet Médicis")
-            address = st.text_input("Adresse", placeholder="ex: 3 Rue Champollion, 75005 Paris")
+            address = st.text_input(
+                "Adresse", placeholder="ex: 3 Rue Champollion, 75005 Paris"
+            )
             maps_url = st.text_input(
                 "Lien Google Maps (optionnel)",
                 placeholder="https://maps.google.com/...",
             )
 
-            submit_cinema = st.form_submit_button("Enregistrer le cinéma")
+            submit_cinema = st.form_submit_button(
+                "Enregistrer le cinéma", use_container_width=True
+            )
 
             if submit_cinema:
                 if not name.strip():

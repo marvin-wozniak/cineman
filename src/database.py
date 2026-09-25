@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import sqlite3
 from typing import List, Optional
 
@@ -104,6 +104,77 @@ class DatabaseManager:
             cursor.execute("DELETE FROM movies WHERE id = ?", (movie_id,))
             conn.commit()
 
+        self.cleanup_old_projected_screenings()
+
+    # --- NETTOYAGE AUTOMATIQUE (-5 JOURS) ---
+    def cleanup_old_projected_screenings(self, days: int = 5) -> int:
+        """"Supprime les séances vues dont la date remonte à plus de 'days' jours """
+        cutoff_date = datetime.now() - timedelta(days=days)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                DELETE FROM screenings
+                WHERE is_projected = 1 AND date_time < ?
+                """,
+                (cutoff_date.isoformat(),),
+            )
+            deleted_count = cursor.rowcount
+            conn.commit()
+            if deleted_count > 0:
+                print(f"[BDD] Nettoyage automatique : {deleted_count} ancienne(s) séance(s) vue(s) supprimée(s).")
+
+   # --- ANTI-CHEVAUCHEMENT / CONCURRENCE ---
+
+    def check_screenings_conflict(self, new_screening: Screening) -> Optional[Screening]:
+        """
+        Vérifie si la nouvelle séance chevauche une séance existante.
+        Retourne la seéance en conflit si trouvée, sinon None.
+        """
+        ads_margin = 15
+
+        start_a = new_screening.date_time
+        if isinstance(start_a, str):
+            start_a = datetime.fromisoformat(start_a)
+
+        duration_a = new_screening.movie.runtime + ads_margin
+        end_a = start_a + timedelta(minutes=duration_a)
+
+        print("\n=== [DEBUG LOG] NOUVELLE SÉANCE ===")
+        print(f"Film : {new_screening.movie.title}")
+        print(f"Début A : {start_a} | Fin A : {end_a}")
+
+        existing_screenings = self.get_all_screenings()
+        print(f"Séances en BDD trouvées : {len(existing_screenings)}")
+
+        for s in existing_screenings:
+            start_b = s.date_time
+            if isinstance(start_b, str):
+                start_b = datetime.fromisoformat(start_b)
+
+            duration_b = s.movie.runtime + ads_margin
+            end_b = start_b + timedelta(minutes=duration_b)
+
+            is_overlap = (start_a < end_b) and (end_a > start_b)
+
+            print(f"--- Comparaison avec ID {s.id} ({s.movie.title}) ---")
+            print(f"  Début B : {start_b} | Fin B : {end_b}")
+            print(f"  {start_a} < {end_b} ? -> {start_a < end_b}")
+            print(f"  {end_a} > {start_b} ? -> {end_a > start_b}")
+            print(f"  CONFLIT DÉTECTÉ ? -> {is_overlap}")
+
+            if is_overlap:
+                print("===================================\n")
+                return s
+
+            print("===================================\n")
+            return None
+    
+
+        
+        
+   
+   
     # --- CRUD CINEMAS ---
 
     def add_cinema(self, cinema: Cinema) -> Cinema:
@@ -149,8 +220,23 @@ class DatabaseManager:
         if screening.cinema.id is None:
             raise ValueError("Le cinéma associé doit posséder un ID.")
 
-        # Calcul automatique de l'heure de fin
-        screening.end_time = screening.calculate_end_time() 
+        #Vérification des conflits d'horaires
+        conflict = self.check_screenings_conflict(screening)
+        if conflict:
+            c_start = conflict.date_time.strftime("%Hh%M") if isinstance(conflict.date_time, datetime) else conflict.date_time
+            c_end = (conflict.calculate_end_time()).strftime("%Hh%M")
+            raise ValueError(
+                f"Conflit d'horaire : la séance chevauche '{conflict.movie.title}'"
+                f"au {conflict.cinema.name} ({c_start} - {c_end})"
+            )
+
+        screening.end_time = screening.calculate_end_time()
+
+
+
+
+
+    
 
         with self.get_connection() as conn:
             cursor = conn.cursor()

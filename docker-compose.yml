@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  cineman-app:
+    build: .
+    container_name: cineman_app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./cineman.db:/app/cineman.db
+    restart: unless-stopped
