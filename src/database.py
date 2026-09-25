@@ -167,8 +167,8 @@ class DatabaseManager:
                 print("===================================\n")
                 return s
 
-            print("===================================\n")
-            return None
+        print("===================================\n")
+        return None
     
 
         
