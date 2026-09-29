@@ -1,10 +1,13 @@
 from datetime import date, datetime, time
 import urllib.parse
+import os
 import streamlit as st
+import streamlit.components.v1 as components 
 
 from src.database import DatabaseManager
-from src.models import Cinema, Movie, Screening
+from src.models import Cinema, Movie, Screening, format_date_fr
 from src.notifier import notify_screening_created
+from pathlib import Path
 
 # Configuration de la page Streamlit
 st.set_page_config(
@@ -14,10 +17,35 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# db_in_use = os.getenv("DB_PATH", "cineman.db")
+# if db_in_use == "test_cineman.db":
+#     st.sidebar.warning("🧪 Mode TEST (test_cineman.db)")
+# else: 
+#     st.sidebar.info("🚀 Mode PROD (cineman.db)")
+
+st.sidebar.divider()
+st.sidebar.subheader("🎟️ Mon Pass UGC")
+
+image_path = Path(__file__).resolve().parent / "assets" / "UGC.png"
+
+if image_path.exists():
+  st.sidebar.image(str(image_path), caption="Pass UGC", use_container_width=True)
+else:
+  st.sidebar.warning(f"⚠️ Image introuvable : `{image_path}`")
+
+
+
+
+
 # Initialisation du gestionnaire BDD (déclenche aussi le nettoyage auto -8j)
-db = DatabaseManager("cineman.db")
+db = DatabaseManager()
+
+st.markdown("<div id='top'></div>", unsafe_allow_html=True)
 
 st.title("🎬 Cineman — Programmation Répertoire")
+
+
+
 
 # Navigation par onglets
 tab_planning, tab_add_screening, tab_add_movie, tab_add_cinema = st.tabs([
@@ -27,6 +55,39 @@ tab_planning, tab_add_screening, tab_add_movie, tab_add_cinema = st.tabs([
     "🏛️ Gestion des cinémas",
 ])
 
+
+
+import streamlit as st
+
+def inject_scroll_to_top_button():
+    st.markdown(
+        """
+        <style>
+        .scroll-to-top-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 999999;
+            background-color: #FF4B4B;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+        }
+        </style>
+        <a href="#top" class="scroll-to-top-btn" title="Remonter tout en haut">⬆️</a>
+        """,
+        unsafe_allow_html=True
+    )
+
+inject_scroll_to_top_button()
 # -------------------------------------------------------------------
 # ONGLET 1 : Planning des séances (Layout Optimisé Mobile)
 # -------------------------------------------------------------------
@@ -83,7 +144,7 @@ with tab_planning:
                         f"De **{s.movie.director}** ({s.movie.year}) — ⏱️ {s.movie.runtime} min"
                     )
 
-                    start_str = s.date_time.strftime("%d/%m/%Y à %Hh%M")
+                    start_str = format_date_fr(s.date_time)
                     end_str = (
                         s.end_time.strftime("%Hh%M") if s.end_time else "N/A"
                     )
@@ -209,6 +270,8 @@ with tab_add_screening:
 with tab_add_movie:
     st.header("Gestion de la vidéothèque")
 
+    
+
     col_form, col_list = st.columns([1, 1])
 
     with col_form:
@@ -315,3 +378,6 @@ with tab_add_cinema:
                 if c.address:
                     st.caption(c.address)
                 st.divider()
+
+
+

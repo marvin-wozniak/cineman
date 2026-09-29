@@ -3,11 +3,13 @@ import sqlite3
 from typing import List, Optional
 
 from src.models import Cinema, Movie, Screening
+import os 
 
+DB_PATH = os.getenv("DB_PATH", "cineman.db")
 
 class DatabaseManager:
 
-    def __init__(self, db_path: str = "cineman.db"):
+    def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self._init_db()
 
@@ -60,6 +62,36 @@ class DatabaseManager:
             conn.commit()
 
     # --- CRUD MOVIES ---
+    def get_movies_without_screenings(self) -> List[Movie]:
+            """Récupère uniquement les films qui n'ont AUCUNE séance programmée."""
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                SELECT 
+                m.id, m.title, m.director, m.year, m.runtime
+                FROM movies m
+                LEFT JOIN screenings s ON m.id = s.movie_id
+                WHERE s.id IS NULL
+                ORDER BY m.title ASC
+            """)
+            rows = cursor.fetchall()
+    
+            return [
+                Movie(
+                id=row[0],
+                title=row[1],
+                director=row[2],
+                year=row[3],
+                runtime=row[4]
+                )
+                for row in rows
+                ]
+    
+
+
+
+
+
 
     def add_movie(self, movie: Movie) -> Movie:
         """Insère un film en base de données et retourne l'objet avec son ID généré."""
@@ -105,6 +137,10 @@ class DatabaseManager:
             conn.commit()
 
         self.cleanup_old_projected_screenings()
+
+   
+
+    
 
     # --- NETTOYAGE AUTOMATIQUE (-5 JOURS) ---
     def cleanup_old_projected_screenings(self, days: int = 5) -> int:
@@ -269,7 +305,10 @@ class DatabaseManager:
                 FROM screenings s
                 JOIN movies m ON s.movie_id = m.id
                 JOIN cinemas c ON s.cinema_id = c.id
-                ORDER BY s.date_time ASC
+                ORDER BY 
+                    CAST(s.is_projected AS INTEGER) ASC,
+                    CASE WHEN s.is_projected = 0 THEN s.date_time END ASC,
+                    CASE WHEN s.is_projected = 1 THEN s.date_time END DESC
             """)
             rows = cursor.fetchall()
 

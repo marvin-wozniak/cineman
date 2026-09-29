@@ -9,6 +9,8 @@ __pycache__/
 # Base de données locale
 *.db
 *.sqlite3
+test_cineman.db
+*.db-journal
 
 # Fichiers d'environnement / secrets
 .env
