@@ -40,11 +40,11 @@ else:
 # Initialisation du gestionnaire BDD (déclenche aussi le nettoyage auto -8j)
 db = DatabaseManager()
 
-st.markdown("<div id='top'></div>", unsafe_allow_html=True)
+
 
 st.title("🎬 Cineman — Programmation Répertoire")
 
-
+st.markdown("<div id='top'></div>", unsafe_allow_html=True)
 
 
 # Navigation par onglets
