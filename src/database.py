@@ -1,11 +1,13 @@
 from datetime import datetime, time, timedelta
 import sqlite3
+from pathlib import Path
 from typing import List, Optional
 
 from src.models import Cinema, Movie, Screening
 import os 
 
-DB_PATH = os.getenv("DB_PATH", "cineman.db")
+DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "cineman.db"
+DB_PATH = os.getenv("DB_PATH", str(DEFAULT_DB_PATH))
 
 class DatabaseManager:
 
@@ -29,10 +31,13 @@ class DatabaseManager:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS movies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tmdb_id INTEGER UNIQUE,
                     title TEXT NOT NULL,
-                    director TEXT NOT NULL,
-                    year INTEGER NOT NULL,
-                    runtime INTEGER NOT NULL
+                    director TEXT,
+                    year INTEGER,
+                    runtime INTEGER,
+                    poster_path TEXT,
+                    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
 
@@ -93,20 +98,32 @@ class DatabaseManager:
 
 
 
-    def add_movie(self, movie: Movie) -> Movie:
-        """Insère un film en base de données et retourne l'objet avec son ID généré."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO movies (title, director, year, runtime)
-                VALUES (?, ?, ?, ?)
-                """,
-                (movie.title, movie.director, movie.year, movie.runtime),
-            )
-            conn.commit()
-            movie.id = cursor.lastrowid
-            return movie
+    def add_movie(self, movie_data: dict) -> bool:
+        """Ajoute un film en base à partir des données TMDB"""
+        query = """
+                INSERT INTO movies (tmdb_id, title, director, year, runtime, poster_path)
+                VALUES (?, ?, ?, ?, ?, ?)
+        """
+
+        try:    
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                query,
+            (
+                movie_data.get("tmdb_id"),
+                movie_data.get("title"),
+                movie_data.get("director"),
+                movie_data.get("year"),
+                movie_data.get("runtime"),
+                movie_data.get("poster_path"),
+            ),   
+                )
+                conn.commit()
+                return True
+        except sqlite3.IntegrityError:
+            print(f"Le film '{movie_data.get('title')} est déjà enregistré.")
+            return False
 
     def get_all_movies(self) -> List[Movie]:
         """Récupère tous les films sous forme d'objets Movie."""

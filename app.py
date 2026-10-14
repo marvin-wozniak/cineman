@@ -7,6 +7,7 @@ import streamlit.components.v1 as components
 from src.database import DatabaseManager
 from src.models import Cinema, Movie, Screening, format_date_fr
 from src.notifier import notify_screening_created
+from src.tmdb import TMDBClient
 from pathlib import Path
 
 # Configuration de la page Streamlit
@@ -39,6 +40,7 @@ else:
 
 # Initialisation du gestionnaire BDD (déclenche aussi le nettoyage auto -8j)
 db = DatabaseManager()
+tmdb = TMDBClient()
 
 
 
@@ -270,43 +272,102 @@ with tab_add_screening:
 with tab_add_movie:
     st.header("Gestion de la vidéothèque")
 
-    
+# subtab_add, subtab_list = st.tabs(["🔍 Ajouter via TMDB", "📚 Films enregistrés & Suppression"])
+  
+  # Sous-onglet : Ajouter un film via TMDB
+# with subtab_add:
+    query = st.text_input("Rechercher un film sur TMDB", placeholder="Ex: Les Affranchis, Inception...")
+    if query:
+      results = tmdb.search_movies(query)
+      if not results:
+        st.warning("Aucun film trouvé.")
+      else:
+        for movie_summary in results:
+          tmdb_id = movie_summary.get("id")
+          title = movie_summary.get("title")
+          year = movie_summary.get("year", "N/A")
+          director = movie_summary.get("director", "Réalisateur inconnu")
+          
+          col_info, col_btn = st.columns([4, 1])
+          with col_info:
+            st.markdown(f"**{title}** ({year})")
+          with col_btn:
+            if st.button("Ajouter", key=f"add_{tmdb_id}"):
+              details = tmdb.get_movie_details(tmdb_id)
+              if details:
+                details["tmdb_id"] = tmdb_id
+                if db.add_movie(details):
+                  st.success(f"'{title}' ajouté à la base !")
+                  st.rerun()
+                else:
+                  st.warning("Ce film est déjà enregistré.")
 
+  # Sous-onglet : Films enregistrés & Suppression
+# with subtab_list:
+#     movies = db.get_all_movies()
+#     if not movies:
+#       st.info("Aucun film enregistré dans la base.")
+#     else:
+#       cols = st.columns(4)
+#       for idx, movie in enumerate(movies):
+#         col = cols[idx % 4]
+#         with col:
+#           title = movie[2]
+#           director = movie[3] or "Inconnu"
+#           year = movie[4] or "N/A"
+#           poster_path = movie[6]
+          
+#           if poster_path:
+#             st.image(f"https://image.tmdb.org/t/p/w500{poster_path}", use_container_width=True)
+          
+#           st.subheader(title)
+#           st.caption(f"{year} • {director}")
+#           # Bouton de suppression à connecter à une méthode delete_movie()
+#           if st.button("Supprimer", key=f"del_{movie[0]}"):
+#             st.info("Fonction de suppression à exécuter.")
+
+    
+    
+    
+    
+    
+    
+    
     col_form, col_list = st.columns([1, 1])
 
-    with col_form:
-        st.subheader("Ajouter un film")
-        with st.form("add_movie_form"):
-            title = st.text_input("Titre du film")
-            director = st.text_input("Réalisateur")
+    # with col_form:
+    #     st.subheader("Ajouter un film")
+    #     with st.form("add_movie_form"):
+    #         title = st.text_input("Titre du film")
+    #         director = st.text_input("Réalisateur")
 
-            col_year, col_runtime = st.columns(2)
-            with col_year:
-                year = st.number_input(
-                    "Année de sortie", min_value=1895, max_value=2030, value=2024
-                )
-            with col_runtime:
-                runtime = st.number_input(
-                    "Durée (minutes)", min_value=1, max_value=600, value=100
-                )
+    #         col_year, col_runtime = st.columns(2)
+    #         with col_year:
+    #             year = st.number_input(
+    #                 "Année de sortie", min_value=1895, max_value=2030, value=2024
+    #             )
+    #         with col_runtime:
+    #             runtime = st.number_input(
+    #                 "Durée (minutes)", min_value=1, max_value=600, value=100
+    #             )
 
-            submit_movie = st.form_submit_button(
-                "Enregistrer le film", use_container_width=True
-            )
+    #         submit_movie = st.form_submit_button(
+    #             "Enregistrer le film", use_container_width=True
+    #         )
 
-            if submit_movie:
-                if not title.strip() or not director.strip():
-                    st.error("Le titre et le réalisateur sont obligatoires.")
-                else:
-                    new_movie = Movie(
-                        title=title.strip(),
-                        director=director.strip(),
-                        year=int(year),
-                        runtime=int(runtime),
-                    )
-                    db.add_movie(new_movie)
-                    st.success(f"Film '{title}' ajouté avec succès !")
-                    st.rerun()
+    #         if submit_movie:
+    #             if not title.strip() or not director.strip():
+    #                 st.error("Le titre et le réalisateur sont obligatoires.")
+    #             else:
+    #                 new_movie = Movie(
+    #                     title=title.strip(),
+    #                     director=director.strip(),
+    #                     year=int(year),
+    #                     runtime=int(runtime),
+    #                 )
+    #                 db.add_movie(new_movie)
+    #                 st.success(f"Film '{title}' ajouté avec succès !")
+    #                 st.rerun()
 
     with col_list:
         st.subheader("Films enregistrés")
