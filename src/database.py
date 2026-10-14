@@ -67,33 +67,17 @@ class DatabaseManager:
             conn.commit()
 
     # --- CRUD MOVIES ---
-    def get_movies_without_screenings(self) -> List[Movie]:
-            """Récupère uniquement les films qui n'ont AUCUNE séance programmée."""
-            with self.get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                SELECT 
-                m.id, m.title, m.director, m.year, m.runtime
-                FROM movies m
-                LEFT JOIN screenings s ON m.id = s.movie_id
-                WHERE s.id IS NULL
-                ORDER BY m.title ASC
-            """)
-            rows = cursor.fetchall()
-    
-            return [
-                Movie(
-                id=row[0],
-                title=row[1],
-                director=row[2],
-                year=row[3],
-                runtime=row[4]
-                )
-                for row in rows
-                ]
-    
-
-
+    def get_unassigned_movies(self) -> list:
+        """Récupère uniquement les films qui n'ont aucune séance programmée."""
+        query = """
+        SELECT * FROM movies
+        WHERE id NOT IN (SELECT DISTINCT movie_id FROM screenings)
+        ORDER BY title ASC
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            return cursor.fetchall()
 
 
 

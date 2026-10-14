@@ -210,23 +210,27 @@ with tab_planning:
 with tab_add_screening:
     st.header("Programmer une nouvelle séance")
 
+    unassigned_movies = db.get_unassigned_movies()
     movies = db.get_all_movies()
     cinemas = db.get_all_cinemas()
 
     if not movies:
         st.warning(
-            "Veuillez d'abord ajouter au moins un film dans l'onglet 'Gestion des films'."
+            "Tous vos films enregistrés ont déjà une séance programmée !"
         )
     elif not cinemas:
         st.warning(
             "Veuillez d'abord ajouter au moins un cinéma dans l'onglet 'Gestion des cinémas'."
         )
     else:
-        movie_options = {f"{m.title} ({m.director})": m for m in movies}
+        movie_options = {
+        f"{m[2]} ({m[3] or 'Réalisateur inconnu'})": m[0] for m in unassigned_movies
+        }
         cinema_options = {c.name: c for c in cinemas}
 
         with st.form("add_screening_form"):
             selected_movie_label = st.selectbox("Film", list(movie_options.keys()))
+            selected_movie_id = movie_options[selected_movie_label]
             selected_cinema_name = st.selectbox("Cinéma", list(cinema_options.keys()))
 
             col_date, col_time = st.columns(2)
